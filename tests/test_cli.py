@@ -8,6 +8,7 @@ import io
 import os
 import pytest
 import sqlite3
+import subprocess
 import tempfile
 from typing import Iterator
 
@@ -86,18 +87,6 @@ def test_no_traces(store_data, stdout, stderr):
     assert ret == 0
 
 
-def test_count_sample():
-    traces = [
-        CallTrace(func, {'a': int, 'b': str}, NoneType),
-        CallTrace(func, {'a': str, 'b': str}, NoneType),
-        CallTrace(func2, {'a': str, 'b': int}, NoneType),
-        CallTrace(func2, {'a': int, 'b': str}, NoneType),
-        CallTrace(func2, {'a': str, 'b': int}, NoneType)
-    ]
-    ret = cli.count_sample(traces)
-    assert ret == {'tests.test_cli.func2': 3, 'tests.test_cli.func': 2}
-
-
 def test_display_sample_count(capsys, stderr):
     traces = [
         CallTrace(func, {'a': int, 'b': str}, NoneType),
@@ -107,8 +96,8 @@ def test_display_sample_count(capsys, stderr):
         CallTrace(func2, {'a': str, 'b': int}, NoneType)
     ]
     cli.display_sample_count(traces, stderr)
-    expected = """Annotation for tests.test_cli.func2 based on 3 call trace(s).
-Annotation for tests.test_cli.func based on 2 call trace(s).
+    expected = """Annotation for tests.test_cli.func based on 2 call trace(s).
+Annotation for tests.test_cli.func2 based on 3 call trace(s).
 """
     assert stderr.getvalue() == expected
 
@@ -127,6 +116,24 @@ Annotation for tests.test_cli.func2 based on 1 call trace(s).
 """
     assert stderr.getvalue() == expected
     assert ret == 0
+
+
+def test_retype_failure(store_data, stdout, stderr):
+    store, db_file = store_data
+    traces = [
+        CallTrace(func, {'a': int, 'b': str}, NoneType),
+        CallTrace(func2, {'a': int, 'b': int}, NoneType),
+    ]
+    store.add(traces)
+    msg = "this is a test"
+    err = subprocess.CalledProcessError(returncode=100, cmd='retype')
+    err.stdout = msg.encode()
+    with mock.patch.dict(os.environ, {DefaultConfig.DB_PATH_VAR: db_file.name}):
+        with mock.patch('subprocess.run', side_effect=err):
+            ret = cli.main(['apply', func.__module__], stdout, stderr)
+    assert stdout.getvalue() == ""
+    assert stderr.getvalue() == f"ERROR: Failed applying stub with retype:\n{msg}\n"
+    assert ret == 1
 
 
 def test_cli_context_manager_activated(capsys, stdout, stderr):

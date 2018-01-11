@@ -14,8 +14,6 @@ import sys
 import tempfile
 
 from typing import (
-    Callable,
-    Dict,
     IO,
     List,
     Optional,
@@ -76,16 +74,10 @@ def monkeytype_config(path: str) -> Config:
     return config
 
 
-def count_sample(traces: List[CallTrace]) -> Dict[str, int]:
-    """Count the times each function is traced."""
-    counter = collections.Counter([t.funcname for t in traces])
-    return dict(counter.most_common())
-
-
 def display_sample_count(traces: List[CallTrace], stderr: IO) -> None:
-    """Print to stderr the statistics for generating stubs."""
-    sample_count = count_sample(traces)
-    for name, count in sample_count.items():
+    """Print to stderr the number of traces each stub is based on."""
+    sample_counter = collections.Counter([t.funcname for t in traces])
+    for name, count in sample_counter.items():
         print(f"Annotation for {name} based on {count} call trace(s).", file=stderr)
 
 
@@ -109,6 +101,10 @@ def get_stub(args: argparse.Namespace, stdout: IO, stderr: IO) -> Optional[Stub]
     return stubs.get(module, None)
 
 
+class HandlerError(Exception):
+    pass
+
+
 def apply_stub_handler(args: argparse.Namespace, stdout: IO, stderr: IO) -> None:
     stub = get_stub(args, stdout, stderr)
     if stub is None:
@@ -129,7 +125,10 @@ def apply_stub_handler(args: argparse.Namespace, stdout: IO, stderr: IO) -> None
             '--target-dir ' + src_dir,
             src_path
         ])
-        subprocess.run(cmd, shell=True, check=True, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
+        try:
+            subprocess.run(cmd, shell=True, check=True, stderr=subprocess.STDOUT, stdout=subprocess.PIPE)
+        except subprocess.CalledProcessError as cpe:
+            raise HandlerError(f"Failed applying stub with retype:\n{cpe.stdout.decode('utf-8')}")
 
 
 def print_stub_handler(args: argparse.Namespace, stdout: IO, stderr: IO) -> None:
@@ -143,10 +142,14 @@ def print_stub_handler(args: argparse.Namespace, stdout: IO, stderr: IO) -> None
 def run_handler(args: argparse.Namespace, stdout: IO, stderr: IO) -> None:
     # remove initial `monkeytype run`
     old_argv = sys.argv.copy()
-    sys.argv = sys.argv[2:]
     try:
         with trace(args.config):
-            runpy.run_path(args.script_path, run_name='__main__')
+            if args.m:
+                sys.argv = sys.argv[3:]
+                runpy.run_module(args.script_path, run_name='__main__', alter_sys=True)
+            else:
+                sys.argv = sys.argv[2:]
+                runpy.run_path(args.script_path, run_name='__main__')
     finally:
         sys.argv = old_argv
 
@@ -215,6 +218,11 @@ def main(argv: List[str], stdout: IO, stderr: IO) -> int:
         type=str,
         help="""Filesystem path to a Python script file to run under tracing""")
     run_parser.add_argument(
+        '-m',
+        action='store_true',
+        help="Run a library module as a script"
+    )
+    run_parser.add_argument(
         'script_args',
         nargs=argparse.REMAINDER,
     )
@@ -273,7 +281,11 @@ qualname format.""")
         return 1
 
     with args.config.cli_context(args.command):
-        handler(args, stdout, stderr)
+        try:
+            handler(args, stdout, stderr)
+        except HandlerError as err:
+            print(f"ERROR: {err}", file=stderr)
+            return 1
 
     return 0
 
