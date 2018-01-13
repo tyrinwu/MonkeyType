@@ -472,6 +472,18 @@ class TestUpdateSignatureReturn:
         sig = update_signature_return(sig, return_type=str)
         assert sig == Signature(return_annotation=str)
 
+    def test_update_return_None(self):
+        """Test return annotations from types being None"""
+        sig = Signature.from_callable(UpdateSignatureHelper.a_class_method)
+        sig = update_signature_return(sig, return_type=None)
+        assert sig == Signature(return_annotation=inspect.Signature.empty)
+
+    def test_update_return_NoneType(self):
+        """Test return annotations from types being NoneType"""
+        sig = Signature.from_callable(UpdateSignatureHelper.a_class_method)
+        sig = update_signature_return(sig, return_type=NoneType)
+        assert sig == Signature(return_annotation=NoneType)
+
     def test_update_return_with_anno(self):
         """Leave existing return annotations alone"""
         sig = Signature.from_callable(UpdateSignatureHelper.has_annos)
