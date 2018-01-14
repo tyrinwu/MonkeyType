@@ -4,6 +4,12 @@ Changelog
 master
 ------
 
+18.1.11
+-------
+
+* Fix crash in RewriteEmptyContainers rewriter if a parameter has only empty
+  container types in traces (and more than one). Fixes #53.
+
 
 18.1.10
 -------
