@@ -191,11 +191,11 @@ def update_signature_args(
     for arg_idx, name in enumerate(sig.parameters):
         param = sig.parameters[name]
         typ = arg_types.get(name)
-        typ = inspect.Parameter.empty if (typ is None or typ is NoneType) else typ
-        with_self = (has_self and arg_idx == 0)
+        typ = inspect.Parameter.empty if typ is None else typ
+        is_self = (has_self and arg_idx == 0)
         annotated = param.annotation is not inspect.Parameter.empty
-        # Dont' touch existing annotations unless ignore_existing_annotations
-        if not with_self and (ignore_existing_annotations or not annotated):
+        # Don't touch existing annotations unless ignore_existing_annotations
+        if not is_self and (ignore_existing_annotations or not annotated):
             param = param.replace(annotation=typ)
         params.append(param)
     return sig.replace(parameters=params)
@@ -208,7 +208,7 @@ def update_signature_return(
         ignore_existing_annotations: bool = False) -> inspect.Signature:
     """Update return annotation with the supplied types"""
     anno = sig.return_annotation
-    # Dont' touch pre-existing annotations unless ignore_existing_annotations
+    # Don't touch pre-existing annotations unless ignore_existing_annotations
     if not ignore_existing_annotations and anno is not inspect.Signature.empty:
         return sig
     # NB: We cannot distinguish between functions that explicitly only
@@ -245,7 +245,7 @@ def get_updated_definition(
     func: Callable,
     traces: Iterable[CallTrace],
     rewriter: Optional[TypeRewriter] = None,
-    ignore_existing_annotations: bool = False
+    ignore_existing_annotations: bool = False,
 ) -> FunctionDefinition:
     """Update the definition for func using the types collected in traces."""
     if rewriter is None:
